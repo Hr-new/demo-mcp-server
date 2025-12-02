@@ -2,6 +2,29 @@
 
 A Model Context Protocol (MCP) server that provides real-time weather data and alerts for US locations using the National Weather Service API.
 
+## What is MCP (Model Context Protocol)?
+
+**Model Context Protocol (MCP)** is an open protocol that standardizes how applications provide context to Large Language Models (LLMs). It enables AI assistants like Claude, GitHub Copilot, and others to securely connect to external data sources, APIs, and tools.
+
+### Key Benefits of MCP:
+
+- **Unified Interface**: One protocol works across multiple AI platforms (Claude, Copilot, etc.)
+- **Secure Context Sharing**: Controlled access to external data and services
+- **Extensibility**: Easy to add custom tools and data sources
+- **Standardized Communication**: Uses JSON-RPC over stdio transport
+- **Tool Registration**: Dynamic tool discovery and invocation
+
+### MCP Architecture:
+
+```
+┌─────────────────┐         ┌─────────────────┐         ┌─────────────────┐
+│   AI Client     │ ◄─────► │   MCP Server    │ ◄─────► │  External API   │
+│ (Copilot/Claude)│  stdio  │  (Your Tools)   │  HTTP   │ (Weather/DB/etc)│
+└─────────────────┘         └─────────────────┘         └─────────────────┘
+```
+
+The MCP server acts as a bridge between AI clients and external services, exposing tools that the AI can invoke to fetch real-time data.
+
 ## Features
 
 - **Weather Forecasts**: Get 7-day weather forecasts for any US location using GPS coordinates
@@ -156,6 +179,170 @@ npm run build
 2. Register a new tool using `server.registerTool()`
 3. Build the project: `npm run build`
 4. Reload your MCP client (VS Code, Claude Desktop, etc.)
+
+## Creating Your Own MCP Server
+
+Want to build your own MCP server? Here's a step-by-step guide:
+
+### 1. Project Setup
+
+```bash
+# Create a new project
+mkdir my-mcp-server
+cd my-mcp-server
+
+# Initialize npm project
+npm init -y
+
+# Install dependencies
+npm install @modelcontextprotocol/sdk zod
+npm install -D typescript @types/node
+
+# Initialize TypeScript
+npx tsc --init
+```
+
+### 2. Basic MCP Server Structure
+
+Create `src/index.ts`:
+
+```typescript
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
+
+// Create server instance
+const server = new McpServer({
+  name: "my-server",
+  version: "1.0.0",
+});
+
+// Register a tool
+server.registerTool(
+  "my_tool",
+  {
+    title: "My Custom Tool",
+    description: "Description of what this tool does",
+    inputSchema: {
+      param1: z.string().describe("First parameter description"),
+      param2: z.number().describe("Second parameter description"),
+    },
+  },
+  async ({ param1, param2 }) => {
+    // Your tool logic here
+    const result = `Processed: ${param1} and ${param2}`;
+    
+    return {
+      content: [
+        {
+          type: "text",
+          text: result,
+        },
+      ],
+    };
+  }
+);
+
+// Start the server
+async function main() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error("MCP Server running on stdio");
+}
+
+main().catch((error) => {
+  console.error("Fatal error:", error);
+  process.exit(1);
+});
+```
+
+### 3. Configure TypeScript
+
+Update `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "outDir": "./build",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true
+  },
+  "include": ["src/**/*"]
+}
+```
+
+### 4. Add Build Script
+
+Update `package.json`:
+
+```json
+{
+  "scripts": {
+    "build": "tsc"
+  }
+}
+```
+
+### 5. Build and Test
+
+```bash
+# Build the project
+npm run build
+
+# Test with MCP inspector
+npx @modelcontextprotocol/inspector node build/index.js
+```
+
+### 6. Tool Design Best Practices
+
+**Use Zod for Input Validation:**
+```typescript
+inputSchema: {
+  email: z.string().email().describe("User email address"),
+  age: z.number().min(0).max(150).describe("User age"),
+  status: z.enum(["active", "inactive"]).describe("Account status"),
+}
+```
+
+**Provide Clear Descriptions:**
+- Tool titles should be concise (3-7 words)
+- Descriptions should explain what the tool does and when to use it
+- Parameter descriptions help the AI understand what to provide
+
+**Handle Errors Gracefully:**
+```typescript
+try {
+  const data = await fetchExternalAPI();
+  return { content: [{ type: "text", text: JSON.stringify(data) }] };
+} catch (error) {
+  return {
+    content: [{
+      type: "text",
+      text: `Error: ${error.message}`
+    }],
+    isError: true
+  };
+}
+```
+
+### 7. Common MCP Server Use Cases
+
+- **Database Queries**: Connect to PostgreSQL, MongoDB, etc.
+- **API Integrations**: Weather, stock prices, news, social media
+- **File Operations**: Read/write files, search codebases
+- **System Information**: Server stats, process monitoring
+- **Custom Business Logic**: Internal tools, calculations, workflows
+
+### 8. Resources
+
+- **MCP Documentation**: https://modelcontextprotocol.io
+- **MCP SDK**: https://github.com/modelcontextprotocol/sdk
+- **Example Servers**: https://github.com/modelcontextprotocol/servers
+- **Zod Documentation**: https://zod.dev
 
 ## API Information
 
